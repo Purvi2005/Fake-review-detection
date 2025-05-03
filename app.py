@@ -9,9 +9,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, accuracy_score
 import streamlit as st
 
-# ---------------------------
-# Step 1: Data Collection Function
-# ---------------------------
+# Function to get reviews from "all reviews" page url
 def get_amazon_reviews(review_url, max_reviews=10):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -37,11 +35,8 @@ def get_amazon_reviews(review_url, max_reviews=10):
             reviews.append(review_text)
     return reviews
 
-# ---------------------------
-# Step 2: Model Training and Saving
-# ---------------------------
+# Train model and save to disk
 def train_and_save_model():
-    # Sample labeled dataset (for demo purposes)
     reviews = [
         "Great product! Must buy now!",  # fake
         "This is the best purchase I've ever made.",  # fake
@@ -70,15 +65,11 @@ def train_and_save_model():
     acc = accuracy_score(y_test, y_pred)
     report = classification_report(y_test, y_pred, target_names=['Real', 'Fake'])
 
-    # Save model and vectorizer
     joblib.dump(clf, 'fake_review_model.joblib')
     joblib.dump(vectorizer, 'vectorizer.joblib')
 
     return acc, report
 
-# ---------------------------
-# Step 3: Load model and analyze reviews
-# ---------------------------
 def load_model():
     model = joblib.load('fake_review_model.joblib')
     vectorizer = joblib.load('vectorizer.joblib')
@@ -87,13 +78,12 @@ def load_model():
 def predict_fake(model, vectorizer, review):
     review_vec = vectorizer.transform([review])
     pred = model.predict(review_vec)
-    return pred[0]  # 1 for fake, 0 for real
+    return pred[0]
 
 def analyze_reviews(model, vectorizer, reviews):
     sentiment_counts = {'Positive':0, 'Negative':0, 'Neutral':0}
-    fake_counts = {'Fake': 0, 'Real': 0}
-
-    detailed_results = []
+    fake_counts = {'Fake':0, 'Real':0}
+    detailed = []
 
     for review in reviews:
         polarity = TextBlob(review).sentiment.polarity
@@ -109,112 +99,73 @@ def analyze_reviews(model, vectorizer, reviews):
         label = 'Fake' if fake_flag == 1 else 'Real'
         fake_counts[label] += 1
 
-        detailed_results.append({
-            'review': review,
-            'sentiment': sentiment,
-            'polarity': polarity,
-            'fake_or_real': label
-        })
+        detailed.append({'review': review, 'sentiment': sentiment, 'polarity': polarity, 'authenticity': label})
 
-    return sentiment_counts, fake_counts, detailed_results
+    return sentiment_counts, fake_counts, detailed
 
-# ---------------------------
-# Step 4: Visualization of Sentiments
-# ---------------------------
-def plot_sentiment_graph(sentiment_counts):
-    labels = list(sentiment_counts.keys())
-    counts = [sentiment_counts[label] for label in labels]
-    colors = ['green', 'red', 'gray']
+def plot_bar_chart(counts_dict, title, colors):
+    import matplotlib.pyplot as plt
+    labels = list(counts_dict.keys())
+    counts = [counts_dict[label] for label in labels]
 
-    plt.figure(figsize=(8,5))
+    plt.figure(figsize=(7,4))
     bars = plt.bar(labels, counts, color=colors)
-    plt.title("Sentiment Distribution of Amazon Reviews")
-    plt.xlabel("Sentiment")
-    plt.ylabel("Number of Reviews")
+    plt.title(title)
+    plt.xlabel('Category')
+    plt.ylabel('Count')
     plt.ylim(0, max(counts)+1)
-
     for bar in bars:
         height = bar.get_height()
-        plt.annotate(f'{height}',
-                     xy=(bar.get_x() + bar.get_width()/2, height),
-                     xytext=(0,3),
-                     textcoords='offset points',
-                     ha='center', va='bottom')
+        plt.text(bar.get_x() + bar.get_width()/2, height + 0.1, str(height), ha='center', va='bottom')
     plt.tight_layout()
     st.pyplot(plt)
     plt.clf()
 
-def plot_fake_real_graph(fake_counts):
-    labels = list(fake_counts.keys())
-    counts = [fake_counts[label] for label in labels]
-    colors = ['red', 'blue']
-
-    plt.figure(figsize=(6,4))
-    bars = plt.bar(labels, counts, color=colors)
-    plt.title("Fake vs Real Reviews")
-    plt.xlabel("Label")
-    plt.ylabel("Number of Reviews")
-    plt.ylim(0, max(counts)+1)
-
-    for bar in bars:
-        height = bar.get_height()
-        plt.annotate(f'{height}',
-                     xy=(bar.get_x() + bar.get_width()/2, height),
-                     xytext=(0,3),
-                     textcoords='offset points',
-                     ha='center', va='bottom')
-    plt.tight_layout()
-    st.pyplot(plt)
-    plt.clf()
-
-# ---------------------------
-# Streamlit Web App Interface
-# ---------------------------
 def main():
-    st.title("Amazon Review Analysis & Fake Review Detection")
+    st.title("Amazon Review Sentiment and Fake Review Detection")
 
-    st.header("Step 1: Train Model")
     if st.button("Train Model"):
         acc, report = train_and_save_model()
         st.success(f"Model trained with accuracy: {acc:.2f}")
         st.text("Classification Report:")
         st.text(report)
 
-    st.header("Step 2: Enter Amazon Review Page URL")
-    url = st.text_input("Enter Amazon All Reviews URL:")
-
-    max_reviews = st.slider("Number of Reviews to Analyze", 1, 50, 10)
+    url = st.text_input("Enter Amazon All Reviews URL")
+    max_reviews = st.slider("Number of Reviews to Analyze", min_value=1, max_value=50, value=10)
 
     if url and st.button("Fetch and Analyze Reviews"):
-        with st.spinner("Fetching reviews..."):
-            reviews = get_amazon_reviews(url, max_reviews)
+        reviews = get_amazon_reviews(url, max_reviews)
         if not reviews:
-            st.error("No reviews found or unable to fetch reviews.")
+            st.error("No reviews found or error fetching reviews.")
             return
-
-        st.write(f"Fetched {len(reviews)} reviews:")
+        st.subheader(f"Showing {len(reviews)} Reviews")
         for i, rev in enumerate(reviews, 1):
             st.markdown(f"**Review {i}:** {rev}")
 
-        # Load the saved model and vectorizer
-        model, vectorizer = load_model()
+        try:
+            model, vectorizer = load_model()
+        except Exception as e:
+            st.error(f"Model files missing or error loading model: {e}")
+            st.info("Please click 'Train Model' button above to train and save the model first.")
+            return
 
-        sentiment_counts, fake_counts, detailed_results = analyze_reviews(model, vectorizer, reviews)
+        sentiment_counts, fake_counts, detailed = analyze_reviews(model, vectorizer, reviews)
 
-        st.header("Sentiment Summary")
+        st.subheader("Sentiment Summary")
         st.write(sentiment_counts)
-        plot_sentiment_graph(sentiment_counts)
+        plot_bar_chart(sentiment_counts, "Sentiment Distribution", ['green','red','gray'])
 
-        st.header("Fake vs Real Review Count")
+        st.subheader("Fake vs Real Reviews")
         st.write(fake_counts)
-        plot_fake_real_graph(fake_counts)
+        plot_bar_chart(fake_counts, "Fake vs Real Review Count", ['red','blue'])
 
-        st.header("Detailed Review Analysis")
-        for res in detailed_results:
-            st.markdown(f"- Review: {res['review']}")
-            st.markdown(f"  - Sentiment: {res['sentiment']} (Polarity: {res['polarity']:.2f})")
-            fake_color = 'red' if res['fake_or_real'] == 'Fake' else 'green'
-            st.markdown(f"  - Authenticity: <span style='color:{fake_color}'>{res['fake_or_real']}</span>", unsafe_allow_html=True)
+        st.subheader("Detailed Review Analysis")
+        for record in detailed:
+            color_sent = 'green' if record['sentiment'] == 'Positive' else ('red' if record['sentiment']=='Negative' else 'gray')
+            color_auth = 'red' if record['authenticity'] == 'Fake' else 'green'
+            st.markdown(f"- **Review:** {record['review']}")
+            st.markdown(f"  - Sentiment: <span style='color:{color_sent}'>{record['sentiment']}</span> (Polarity: {record['polarity']:.2f})", unsafe_allow_html=True)
+            st.markdown(f"  - Authenticity: <span style='color:{color_auth}'>{record['authenticity']}</span>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

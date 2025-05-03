@@ -1,0 +1,48 @@
+import requests
+from bs4 import BeautifulSoup
+import streamlit as st
+
+def get_amazon_reviews(review_url, max_reviews=10):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/114.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(review_url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            st.error(f"Failed to fetch page, status code: {response.status_code}")
+            return []
+    except Exception as e:
+        st.error(f"Error fetching reviews: {e}")
+        return []
+    
+    soup = BeautifulSoup(response.content, "html.parser")
+    reviews = []
+
+    review_spans = soup.find_all("span", {"data-hook": "review-body"})
+    for span in review_spans[:max_reviews]:
+        review_text = span.get_text(strip=True)
+        if review_text:
+            reviews.append(review_text)
+    return reviews
+
+def main():
+    st.title("Amazon Product Review Scraper")
+    review_url = st.text_input("Enter the Amazon product review URL:")
+    max_reviews = st.slider("Number of reviews to fetch", 1, 50, 10)
+    
+    if st.button("Fetch Reviews"):
+        if review_url:
+            reviews = get_amazon_reviews(review_url, max_reviews)
+            if reviews:
+                st.subheader("Fetched Reviews:")
+                for i, review in enumerate(reviews, 1):
+                    st.write(f"{i}. {review}")
+            else:
+                st.warning("No reviews found or an error occurred.")
+        else:
+            st.warning("Please enter a valid URL.")
+
+if __name__ == "__main__":
+    main()
