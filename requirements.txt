@@ -1,7 +1,9 @@
 streamlit
 requests
 beautifulsoup4
+textblob
+matplotlib
 scikit-learn
-pandas
-numpy
 joblib
+numpy
+pandas
